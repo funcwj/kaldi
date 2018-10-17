@@ -496,6 +496,9 @@ class XconfigOutputLayer(XconfigLayerBase):
                        'orthonormal-constraint': 1.0,
                             # orthonormal-constraint only matters if bottleneck-dim is set.
                        'include-log-softmax': True,
+                            # for regression task 
+                       'include-activation': '',
+                       'masking-input': '',
                             # this would be false for chain models
                        'objective-type': 'linear',
                             # see Nnet::ProcessOutputNodeConfigLine in
@@ -534,6 +537,14 @@ class XconfigOutputLayer(XconfigLayerBase):
             raise RuntimeError("output-layer does not support negative (floating) "
                                "orthonormal constraint; use a separate linear-component "
                                "followed by batchnorm-component.")
+
+        if self.config['include-activation'] not in ['', 'relu', 'sigmoid', 'tanh']:
+            raise RuntimeError("Unsupported activations in output-layer: {}".format(
+                                self.config['include-activation']))
+
+        if self.config['include-activation'] and self.config['include-log-softmax']:
+            raise RuntimeError("output layer could not include both log-softmax"
+                               " & other activations")
 
     def auxiliary_outputs(self):
 
@@ -594,6 +605,8 @@ class XconfigOutputLayer(XconfigLayerBase):
         bottleneck_dim = self.config['bottleneck-dim']
         objective_type = self.config['objective-type']
         include_log_softmax = self.config['include-log-softmax']
+        include_activations = self.config['include-activation']
+        masking_input = self.config['masking-input']
         output_delay = self.config['output-delay']
 
         affine_options = self.config['ng-affine-options']
@@ -657,6 +670,37 @@ class XconfigOutputLayer(XconfigLayerBase):
                     ''.format(self.name, cur_node))
             configs.append(line)
             cur_node = '{0}.log-softmax'.format(self.name)
+
+        if include_activations:
+            str_to_component = {
+                'relu': 'RectifiedLinearComponent',
+                'tanh': 'TanhComponent',
+                'sigmoid': 'SigmoidComponent'
+            }
+
+            component = str_to_component[include_activations]
+            line = ('component name={0}.{1} type={2} dim={3}'
+                    ''.format(self.name, include_activations, 
+                              component, output_dim))
+            configs.append(line)
+
+            line = ('component-node name={0}.{2}'
+                    ' component={0}.{2} input={1}'
+                    ''.format(self.name, cur_node, include_activations))
+            configs.append(line)
+
+            cur_node = '{0}.{1}'.format(self.name, include_activations)
+
+        if masking_input:
+            line = ('component name={0}.masking type=ElementwiseProductComponent'
+                    'input_dim={1} output_dim={2}'.format(self.name, output_dim * 2, output_dim))
+            configs.append(line)
+            
+            line = ('component-node name={0}.masking component={0}.masking'
+                    'input=Append({1}, {2})'.format(self.name, cur_node, masking_input))
+            configs.append(line)
+
+            cur_node = '{0}.masking'.format(self.name)
 
         if output_delay != 0:
             cur_node = 'Offset({0}, {1})'.format(cur_node, output_delay)
