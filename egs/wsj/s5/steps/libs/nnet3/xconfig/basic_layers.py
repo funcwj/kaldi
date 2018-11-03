@@ -496,9 +496,8 @@ class XconfigOutputLayer(XconfigLayerBase):
                        'orthonormal-constraint': 1.0,
                             # orthonormal-constraint only matters if bottleneck-dim is set.
                        'include-log-softmax': True,
-                            # for regression task 
                        'include-activation': '',
-                       'masking-input': '',
+                       'self-repair-scale': 1.0e-5,
                             # this would be false for chain models
                        'objective-type': 'linear',
                             # see Nnet::ProcessOutputNodeConfigLine in
@@ -606,7 +605,7 @@ class XconfigOutputLayer(XconfigLayerBase):
         objective_type = self.config['objective-type']
         include_log_softmax = self.config['include-log-softmax']
         include_activations = self.config['include-activation']
-        masking_input = self.config['masking-input']
+        self_repair_scale = self.config['self-repair-scale']
         output_delay = self.config['output-delay']
 
         affine_options = self.config['ng-affine-options']
@@ -679,9 +678,9 @@ class XconfigOutputLayer(XconfigLayerBase):
             }
 
             component = str_to_component[include_activations]
-            line = ('component name={0}.{1} type={2} dim={3}'
-                    ''.format(self.name, include_activations, 
-                              component, output_dim))
+            line = ('component name={0}.{1} type={2} dim={3} self-repair-scale={4}'
+                    ''.format(self.name, include_activations, component, 
+                              output_dim, self_repair_scale))
             configs.append(line)
 
             line = ('component-node name={0}.{2}'
@@ -690,17 +689,6 @@ class XconfigOutputLayer(XconfigLayerBase):
             configs.append(line)
 
             cur_node = '{0}.{1}'.format(self.name, include_activations)
-
-        if masking_input:
-            line = ('component name={0}.masking type=ElementwiseProductComponent'
-                    'input_dim={1} output_dim={2}'.format(self.name, output_dim * 2, output_dim))
-            configs.append(line)
-            
-            line = ('component-node name={0}.masking component={0}.masking'
-                    'input=Append({1}, {2})'.format(self.name, cur_node, masking_input))
-            configs.append(line)
-
-            cur_node = '{0}.masking'.format(self.name)
 
         if output_delay != 0:
             cur_node = 'Offset({0}, {1})'.format(cur_node, output_delay)
