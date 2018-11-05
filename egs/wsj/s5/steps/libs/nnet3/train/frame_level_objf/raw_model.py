@@ -79,3 +79,55 @@ def generate_egs_using_targets(data, targets_scp, egs_dir,
                    targets_scp=targets_scp, target_type=target_type,
                    egs_dir=egs_dir,
                    egs_opts=egs_opts if egs_opts is not None else ''))
+
+
+def generate_egs_using_targets_with_embeddings(data, targets_scp, egs_dir,
+                                               left_context, right_context,
+                                               run_opts, stage=0,
+                                               left_context_initial=-1, right_context_final=-1,
+                                               embedding_dir=None,
+                                               num_targets=-1,
+                                               samples_per_iter=20000, frames_per_eg_str="20",
+                                               srand=0, egs_opts=None, cmvn_opts=None):
+    """ Wrapper for calling steps/nnet3/get_egs_targets_with_embeddings.sh
+
+    This method generates egs directly from an scp file of targets, instead of
+    getting them from the alignments (as with the method generate_egs() in
+    module nnet3.train.frame_level_objf.acoustic_model).
+
+    Args:
+        num_targets: For "dense" targets, this option is ignored and the target dim
+                    is computed from the target matrix dimension
+        For other options, see the file steps/nnet3/get_egs_targets.sh
+    """
+
+    num_targets = common_lib.get_feat_dim_from_scp(targets_scp)
+
+    common_lib.execute_command(
+        """steps/nnet3/get_egs_targets_with_embeddings.sh {egs_opts} \
+                --cmd "{command}" \
+                --cmvn-opts "{cmvn_opts}" \
+                --left-context {left_context} \
+                --right-context {right_context} \
+                --left-context-initial {left_context_initial} \
+                --right-context-final {right_context_final} \
+                --stage {stage} \
+                --samples-per-iter {samples_per_iter} \
+                --frames-per-eg {frames_per_eg_str} \
+                --srand {srand} \
+                --num-targets {num_targets} \
+                {data} {embedding_dir} {targets_scp} {egs_dir}
+        """.format(command=run_opts.egs_command,
+                   cmvn_opts=cmvn_opts if cmvn_opts is not None else '',
+                   embedding_dir=embedding_dir,
+                   left_context=left_context,
+                   right_context=right_context,
+                   left_context_initial=left_context_initial,
+                   right_context_final=right_context_final,
+                   stage=stage, samples_per_iter=samples_per_iter,
+                   frames_per_eg_str=frames_per_eg_str, srand=srand,
+                   num_targets=num_targets,
+                   data=data,
+                   targets_scp=targets_scp,
+                   egs_dir=egs_dir,
+                   egs_opts=egs_opts if egs_opts is not None else ''))
